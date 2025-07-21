@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 
-# ✅ Alpine OK : 'date' est disponible via coreutils
 TIMESTAMP=$(date +%s)
 LOGFILE="logs/log-${TIMESTAMP}.log"
 FLASH_TIMEOUT=15
 
-# ✅ Fonction auxiliaire inchangée (compatible bash)
 function getopts-extra () {
     declare i=1
     while [[ ${OPTIND} -le $# && ${!OPTIND:0:1} != '-' ]]; do
@@ -14,7 +12,6 @@ function getopts-extra () {
     done
 }
 
-# ✅ Parsing des arguments : inchangé
 while getopts "hrntvw:p:f:d:l:s::a:k:u:o:" flag; do
     case "$flag" in
         r)	RESETNM="true" ;;
@@ -42,8 +39,8 @@ while getopts "hrntvw:p:f:d:l:s::a:k:u:o:" flag; do
         h)
             echo "usage: $0 [OPTION]..."
             echo "  -h                Show this message"
-            echo "  -r                Reset NetworkManager"
-            echo "  -n                No Rescan (for older versions of nmcli that don't support it)"
+            echo "  -r                Reset network state"
+            echo "  -n                No Rescan (for older scan tools)"
             echo "  -o TEXT           Override specific device AP name to connect to"
             echo "  -v                Verbose log output"
             echo "  -w TEXT           WiFi adapter name (optional)"
@@ -62,7 +59,6 @@ while getopts "hrntvw:p:f:d:l:s::a:k:u:o:" flag; do
     esac
 done
 
-# ❌ Incompatible combinaison
 if [ "$METHOD_DETACH" ] && [ "$METHOD_FLASH" ]; then
     echo "You can't detach and flash at the same time."
     exit 1
@@ -71,7 +67,6 @@ fi
 source common.sh
 run_helper_script "pre-setup"
 
-# 🧠 Choix de méthode si rien passé
 if [ -z "$METHOD_DETACH" ] && [ -z "$METHOD_FLASH" ]; then
     PS3="[?] Select your desired operation [1/2]: "
     select method in "Detach from the cloud" "Flash 3rd Party Firmware"; do
@@ -82,7 +77,6 @@ if [ -z "$METHOD_DETACH" ] && [ -z "$METHOD_FLASH" ]; then
     done
 fi
 
-# 🧠 Récupération interactive des identifiants WiFi
 if [ "$METHOD_DETACH" ] && [ -z "$HAVE_SSID" ]; then
     echo "Detaching requires an SSID and Password."
     read -p "Please enter your SSID: " SSID
@@ -97,11 +91,12 @@ source common_run.sh
 if [ "$METHOD_DETACH" ]; then
     echo "Cutting device off from cloud..."
 
-    # ✅ REMPLACEMENT : pas de systemd sous Alpine
-    nmcli device set "$WIFI_ADAPTER" managed no
-    rc-service NetworkManager stop 2>/dev/null || service NetworkManager stop
+    # ❌ SUPPRESSION: pas de NetworkManager ni managed mode sur Alpine
+    ip link set "$WIFI_ADAPTER" down
+    sleep 1
+    ip link set "$WIFI_ADAPTER" up
 
-    trap 'service NetworkManager start; nmcli device set "$WIFI_ADAPTER" managed yes' EXIT
+    trap 'ip link set "$WIFI_ADAPTER" up' EXIT
 
     INNER_SCRIPT=$(xargs -0 <<- EOF
         SSID='${SSID//\'/\'\"\'\"\'}'
@@ -122,8 +117,11 @@ fi
 if [ "$METHOD_FLASH" ]; then
     echo "Flashing custom firmware..."
 
-    nmcli device set "$WIFI_ADAPTER" managed no
-    trap 'nmcli device set "$WIFI_ADAPTER" managed yes' EXIT
+    ip link set "$WIFI_ADAPTER" down
+    sleep 1
+    ip link set "$WIFI_ADAPTER" up
+
+    trap 'ip link set "$WIFI_ADAPTER" up' EXIT
 
     run_in_docker bash -c "
         bash /src/setup_apmode.sh ${WIFI_ADAPTER} ${VERBOSE_OUTPUT} &&
