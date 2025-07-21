@@ -5,9 +5,11 @@ check_port () {
     port="$2"
     reason="$3"
     echo -n "Checking ${protocol^^} port $port... "
-    process_pid=$(sudo ss -lnp -A "$protocol" "sport = :$port" | grep -Po "(?<=pid=)(\d+)" | head -n1)
-    if [ -n "$process_pid" ]; then
-        process_name=$(ps -p "$process_pid" -o comm=)
+    process_info=$(ss -lnp -A "$protocol" "sport = :$port" 2>/dev/null | grep -oE "pid=[0-9]+," | head -n1)
+
+    if [ -n "$process_info" ]; then
+        process_pid=$(echo "$process_info" | grep -oE "[0-9]+")
+        process_name=$(ps -p "$process_pid" | awk 'NR==2 {print $5}')
         echo "Occupied by $process_name with PID $process_pid."
         echo "Port $port is needed to $reason"
         read -p "Do you wish to terminate $process_name? [y/N] " -n 1 -r
@@ -20,18 +22,12 @@ check_port () {
             echo "Aborting due to occupied port"
             exit 1
         else
-            service=$(ps -p "$process_pid" -o unit= | grep .service | grep -Ev ^user)
-            if [ -n "$service" ]; then
-                echo "Attempting to stop $service"
-                sudo systemctl stop "$service"
-            else
-                echo "Attempting to terminate $process_name"
-                sudo kill "$process_pid"
-                if ! sudo timeout 10 tail --pid="$process_pid" -f /dev/null; then
-                    echo "$process_name is still running after 10 seconds, sending SIGKILL"
-                    sudo kill -9 "$process_pid"
-                    sudo tail --pid="$process_pid" -f /dev/null
-                fi
+            echo "Attempting to terminate $process_name (PID $process_pid)"
+            kill "$process_pid"
+            sleep 1
+            if kill -0 "$process_pid" 2>/dev/null; then
+                echo "$process_name is still running, sending SIGKILL"
+                kill -9 "$process_pid"
             fi
             sleep 1
         fi
@@ -41,13 +37,10 @@ check_port () {
 }
 
 check_firewall () {
-    if sudo systemctl stop firewalld.service &>/dev/null; then
-        echo "Attempting to stop firewalld.service"
-        echo "When done, enable with: ${bold}sudo systemctl start firewalld.service${normal}"
-    fi
-    if command -v ufw >/dev/null && sudo ufw status | grep -qw active; then
-        sudo ufw disable
-        echo "When done, enable with: ${bold}sudo ufw enable${normal}"
+    if service iptables status &>/dev/null; then
+        echo "Detected iptables rules. Attempting to flush..."
+        iptables -F
+        echo "Flushed iptables rules."
     fi
 }
 
@@ -59,22 +52,14 @@ check_blacklist () {
         read -p "Do you wish to remove this file? [y/N] " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            sudo rm /etc/modprobe.d/blacklist-rtl8192cu.conf
+            rm /etc/modprobe.d/blacklist-rtl8192cu.conf
         fi
     fi
 }
 
 check_app_armor () {
-    if type "aa-enabled" &> /dev/null && aa-enabled | grep -qw Yes; then
-        echo "Detected app armour"
-        echo "This has been known to block hostapd, which is required to complete the exploit"
-        read -p "Do you wish to stop the app armour service? [y/N] " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            sudo aa-teardown
-            echo "AppArmour has been turned off.  You will need to manually restart it or reboot your OS for it to turn back on."
-        fi
-    fi
+    # AppArmor is not available under Alpine by default
+    echo "Skipping AppArmor check (not applicable on Alpine)"
 }
 
 echo ""
