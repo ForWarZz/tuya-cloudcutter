@@ -79,7 +79,7 @@ wifi_connect() {
                 echo -n "."
             fi
 
-            SSID_REGEX="-[A-F0-9]{4}"
+            SSID_REGEX="^SmartLife-[A-F0-9]{4}"
             [ -n "${AP_CONNECTED_ENDING}" ] && SSID_REGEX="${AP_CONNECTED_ENDING}"
             [ -n "${OVERRIDE_AP_SSID}" ] && SSID_REGEX="${OVERRIDE_AP_SSID}"
 
