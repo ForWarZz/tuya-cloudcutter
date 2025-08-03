@@ -4,7 +4,7 @@ AP_MATCHED_NAME=""
 AP_CONNECTED_ENDING=""
 
 if [ "${WIFI_ADAPTER}" == "" ]; then
-  WIFI_ADAPTER=$(sudo iw dev | grep -m 1 -oP "Interface \K.*")
+  WIFI_ADAPTER=$(iw dev | grep -m 1 -oP "Interface \K.*")
   if [ "${WIFI_ADAPTER}" == "" ]; then
 	echo "[!] Unable to auto-detect wifi adapter.  Please use the '-w' argument to pass in a wifi adapter."
 	echo "See '$0 -h' for more information."
@@ -52,9 +52,9 @@ wifi_connect () {
         reset_nm
         sleep 1
 
-        sudo ip link set dev ${WIFI_ADAPTER} down
+        ip link set dev ${WIFI_ADAPTER} down
         sleep 1
-        sudo ip link set dev ${WIFI_ADAPTER} up
+        ip link set dev ${WIFI_ADAPTER} up
         while [ "${AP_MATCHED_NAME}" == "" ]
         do
             if [ ${FIRST_RUN} == true ]; then
@@ -70,17 +70,17 @@ wifi_connect () {
                 SSID_REGEX="${AP_CONNECTED_ENDING}"
             fi
 
-            AP_MATCHED_NAME=$(sudo iw ${WIFI_ADAPTER} scan flush | grep -oP "SSID: \K.*$SSID_REGEX")
+            AP_MATCHED_NAME=$(iw ${WIFI_ADAPTER} scan flush | grep -oP "SSID: \K.*$SSID_REGEX")
         done
 
         echo -e "\nFound access point name: \"${AP_MATCHED_NAME}\", trying to connect..."
-        sudo iw dev ${WIFI_ADAPTER} connect "${AP_MATCHED_NAME}"
+        iw dev ${WIFI_ADAPTER} connect "${AP_MATCHED_NAME}"
         until iw dev ${WIFI_ADAPTER} link | grep -qP "SSID: ${AP_MATCHED_NAME}"; do
              echo -n "."
              sleep 2
         done
         echo ""
-        sudo dhclient -v -1 ${WIFI_ADAPTER}
+        dhclient -v -1 ${WIFI_ADAPTER}
 
         # Check if successfully connected
         # Note, we were previously checking GENERAL.STATE and comparing to != "activated" but that has internationalization problems

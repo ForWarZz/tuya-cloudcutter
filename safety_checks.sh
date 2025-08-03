@@ -5,7 +5,7 @@ check_port () {
 	port="$2"
 	reason="$3"
 	echo -n "Checking ${protocol^^} port $port... "
-	process_pid=$(sudo ss -lnp -A "$protocol" "sport = :$port" | grep -m1 -Po "(?<=pid=)(\d+)")
+	process_pid=$(ss -lnp -A "$protocol" "sport = :$port" | grep -m1 -Po "(?<=pid=)(\d+)")
 	if [ -n "$process_pid" ]; then
 		process_name=$(ps -p "$process_pid" -o comm=)
 		echo "Occupied by $process_name with PID $process_pid."
@@ -23,14 +23,14 @@ check_port () {
 			service=$(ps -p "$process_pid" -o unit= | grep .service | grep -Ev ^user)
 			if [ -n "$service" ]; then
 				echo "Attempting to stop $service"
-				sudo systemctl stop "$service"
+				systemctl stop "$service"
 			else
 				echo "Attempting to terminate $process_name"
-				sudo kill "$process_pid"
-				if ! sudo timeout 10 tail --pid="$process_pid" -f /dev/null; then
+				kill "$process_pid"
+				if ! timeout 10 tail --pid="$process_pid" -f /dev/null; then
 					echo "$process_name is still running after 10 seconds, sending SIGKILL"
-					sudo kill -9 "$process_pid"
-					sudo tail --pid="$process_pid" -f /dev/null
+					kill -9 "$process_pid"
+					tail --pid="$process_pid" -f /dev/null
 				fi
 			fi
 			sleep 1
@@ -41,13 +41,13 @@ check_port () {
 }
 
 check_firewall () {
-	if sudo systemctl stop firewalld.service &>/dev/null; then
+	if systemctl stop firewalld.service &>/dev/null; then
 		echo "Attempting to stop firewalld.service"
-		echo "When done, enable with: ${bold}sudo systemctl start firewalld.service${normal}"
+		echo "When done, enable with: ${bold}systemctl start firewalld.service${normal}"
 	fi
-	if command -v ufw >/dev/null && sudo ufw status | grep -qw active; then
-		sudo ufw disable
-		echo "When done, enable with: ${bold}sudo ufw enable${normal}"
+	if command -v ufw >/dev/null && ufw status | grep -qw active; then
+		ufw disable
+		echo "When done, enable with: ${bold}ufw enable${normal}"
 	fi
 }
 
@@ -59,7 +59,7 @@ check_blacklist () {
 		read -p "Do you wish to remove this file? [y/N] " -n 1 -r
 		echo
 		if [[ $REPLY =~ ^[Yy]$ ]]; then
-			sudo rm /etc/modprobe.d/blacklist-rtl8192cu.conf
+			rm /etc/modprobe.d/blacklist-rtl8192cu.conf
 		fi
 	fi
 }
